@@ -19,7 +19,7 @@
     .card {
       width: 100%;
       max-width: 380px;
-      background: rgba(20, 20, 20, 0.88);
+      background: rgba(20, 20, 20, 0.92);
       border-radius: 24px;
       padding: 36px 28px;
       text-align: center;
@@ -59,12 +59,13 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .debug {
-      margin-top: 12px;
+      margin-top: 14px;
       font-size: 12px;
       color: #9ca3af;
       word-break: break-word;
       text-align: left;
       display: none;
+      white-space: pre-wrap;
     }
     .error {
       display: none;
@@ -84,11 +85,15 @@
       padding: 14px 18px;
       border: none;
       border-radius: 12px;
-      background: #60bb46;
+      background: #16a34a;
       color: #fff;
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
+    }
+    .btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
     }
   </style>
 </head>
@@ -98,27 +103,31 @@
     <h1>Opening eSewa</h1>
     <p id="statusText">Redirecting you securely to eSewa…</p>
 
-    <div class="spinner-wrap" id="spinnerWrap">
+    <div class="spinner-wrap">
       <div class="spinner"></div>
       <span id="spinnerLabel">Connecting to server</span>
     </div>
 
     <div class="error" id="errorBox"></div>
-    <button class="btn" id="continueBtn">Continue to eSewa</button>
-    <div class="debug" id="debugBox"></div>
 
-    <form id="esewaForm" method="POST" style="display:none;"></form>
+    <form id="esewaForm" method="POST" action="" accept-charset="UTF-8">
+      <button id="continueBtn" class="btn" type="submit" disabled>
+        Continue to eSewa
+      </button>
+    </form>
+
+    <div class="debug" id="debugBox"></div>
   </div>
 
   <script>
     const statusText = document.getElementById('statusText');
     const spinnerLabel = document.getElementById('spinnerLabel');
     const errorBox = document.getElementById('errorBox');
-    const continueBtn = document.getElementById('continueBtn');
     const debugBox = document.getElementById('debugBox');
     const esewaForm = document.getElementById('esewaForm');
+    const continueBtn = document.getElementById('continueBtn');
 
-    let submitPrepared = false;
+    let prepared = false;
 
     function debug(msg) {
       debugBox.style.display = 'block';
@@ -127,17 +136,18 @@
     }
 
     function showError(message) {
-      statusText.textContent = 'We could not continue to eSewa.';
-      spinnerLabel.textContent = 'Stopped';
       errorBox.style.display = 'block';
       errorBox.textContent = message;
-      continueBtn.style.display = submitPrepared ? 'block' : 'none';
+      statusText.textContent = 'We could not continue to eSewa.';
+      spinnerLabel.textContent = 'Stopped';
       debug('ERROR: ' + message);
     }
 
     function prepareForm(formUrl, formFields) {
       esewaForm.action = formUrl;
-      esewaForm.innerHTML = '';
+
+      // remove any old hidden inputs but keep the visible submit button
+      Array.from(esewaForm.querySelectorAll('input[type="hidden"]')).forEach(el => el.remove());
 
       Object.entries(formFields).forEach(([key, value]) => {
         const input = document.createElement('input');
@@ -147,18 +157,16 @@
         esewaForm.appendChild(input);
       });
 
-      submitPrepared = true;
+      prepared = true;
+      continueBtn.disabled = false;
       continueBtn.style.display = 'block';
-      continueBtn.onclick = () => {
-        spinnerLabel.textContent = 'Opening eSewa';
-        esewaForm.submit();
-      };
+      debug('Form prepared');
     }
 
     async function start() {
       try {
-        const currentUrl = new URL(window.location.href);
-        const sessionUrl = currentUrl.searchParams.get('sessionUrl');
+        const url = new URL(window.location.href);
+        const sessionUrl = url.searchParams.get('sessionUrl');
 
         debug('Page loaded');
         debug('sessionUrl present: ' + Boolean(sessionUrl));
@@ -169,6 +177,7 @@
         }
 
         spinnerLabel.textContent = 'Connecting to server';
+
         const res = await fetch(sessionUrl, {
           method: 'GET',
           headers: { 'Accept': 'application/json' }
@@ -182,7 +191,7 @@
         let data;
         try {
           data = JSON.parse(raw);
-        } catch (_) {
+        } catch (e) {
           showError('Session endpoint returned invalid JSON.');
           return;
         }
@@ -198,20 +207,30 @@
         }
 
         debug('form_url received: ' + data.form_url);
-
         prepareForm(data.form_url, data.form_fields);
 
         statusText.textContent = 'Redirecting you securely to eSewa…';
-        spinnerLabel.textContent = 'Submitting payment form';
+        spinnerLabel.textContent = 'Opening eSewa';
 
+        // try automatic submit once
         setTimeout(() => {
-          debug('Attempting auto-submit');
-          esewaForm.submit();
+          if (!prepared) return;
+          debug('Attempting requestSubmit');
+          try {
+            if (typeof esewaForm.requestSubmit === 'function') {
+              esewaForm.requestSubmit();
+            } else {
+              continueBtn.click();
+            }
+          } catch (e) {
+            debug('Auto-submit failed: ' + (e?.message || e));
+          }
         }, 500);
 
+        // if still visible, user can tap the native submit button
         setTimeout(() => {
           if (document.visibilityState === 'visible') {
-            debug('Still visible after auto-submit; user tap likely needed');
+            debug('Still visible after auto-submit; native submit button available');
             continueBtn.style.display = 'block';
           }
         }, 2000);
