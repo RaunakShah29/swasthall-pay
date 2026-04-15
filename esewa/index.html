@@ -1,112 +1,190 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-  <meta name="theme-color" content="#60bb46">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Opening eSewa</title>
   <style>
-    *,*::before,*::after{box-sizing:border-box}
-    body{margin:0;min-height:100svh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#f0fdf4 0%,#dcfce7 100%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827}
-    .card{width:min(100%,390px);background:#fff;border-radius:24px;box-shadow:0 10px 36px rgba(0,0,0,.12);padding:34px 28px;text-align:center}
-    .logo{width:72px;height:72px;border-radius:20px;background:#60bb46;margin:0 auto 20px;display:grid;place-items:center;color:#fff;font-size:40px;font-weight:900;box-shadow:0 8px 24px rgba(96,187,70,.35)}
-    h1{margin:0 0 10px;font-size:22px}
-    p{margin:0;color:#64748b;line-height:1.5}
-    .spinner{width:30px;height:30px;margin:26px auto 14px;border:3px solid #dcfce7;border-top-color:#60bb46;border-radius:50%;animation:spin .75s linear infinite}
-    .status{color:#60bb46;font-size:14px;font-weight:600}
-    .secure{margin-top:22px;color:#94a3b8;font-size:12px}
-    .error{display:none;margin-top:18px;color:#dc2626;font-size:14px;line-height:1.5}
-    button{display:none;margin-top:18px;width:100%;border:0;border-radius:14px;padding:14px 18px;background:#60bb46;color:#fff;font-size:16px;font-weight:700}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(160deg, #f0fdf4 0%, #dcfce7 100%);
+      color: #111827;
+    }
+    .card {
+      width: 100%;
+      max-width: 380px;
+      background: #fff;
+      border-radius: 24px;
+      padding: 36px 28px;
+      text-align: center;
+      box-shadow: 0 8px 32px rgba(0,0,0,.12);
+    }
+    .logo {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #60bb46;
+      color: #fff;
+      font-size: 38px;
+      font-weight: 900;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    p {
+      color: #6b7280;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+    .spinner-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: #60bb46;
+      font-weight: 600;
+      margin-bottom: 18px;
+    }
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #d1fae5;
+      border-top-color: #60bb46;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error {
+      display: none;
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #fef2f2;
+      color: #b91c1c;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .btn {
+      display: none;
+      margin-top: 18px;
+      width: 100%;
+      padding: 14px 18px;
+      border: none;
+      border-radius: 12px;
+      background: #60bb46;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="logo">e</div>
     <h1>Opening eSewa</h1>
-    <p id="message">Redirecting you securely to complete your payment. Please do not close this page.</p>
-    <div class="spinner" id="spinner"></div>
-    <div class="status" id="status">Connecting to eSewa…</div>
-    <div class="secure">Secured by eSewa Payment Gateway</div>
-    <div class="error" id="error"></div>
-    <button id="continueBtn" type="button">Continue to eSewa</button>
+    <p id="statusText">Connecting to server…</p>
+
+    <div class="spinner-wrap" id="spinnerWrap">
+      <div class="spinner"></div>
+      <span id="spinnerLabel">Preparing checkout</span>
+    </div>
+
+    <div class="error" id="errorBox"></div>
+    <button class="btn" id="retryBtn" onclick="window.location.reload()">Try again</button>
+
+    <form id="esewaForm" method="POST" style="display:none;"></form>
   </div>
 
   <script>
-    (async function () {
-      const params = new URLSearchParams(window.location.search);
-      const sessionUrl = params.get('sessionUrl');
-      const errorEl = document.getElementById('error');
-      const button = document.getElementById('continueBtn');
-      const spinner = document.getElementById('spinner');
-      const statusEl = document.getElementById('status');
-      const messageEl = document.getElementById('message');
+    const statusText = document.getElementById('statusText');
+    const spinnerLabel = document.getElementById('spinnerLabel');
+    const errorBox = document.getElementById('errorBox');
+    const retryBtn = document.getElementById('retryBtn');
+    const esewaForm = document.getElementById('esewaForm');
 
-      function showManual(form) {
-        spinner.style.display = 'none';
-        statusEl.style.display = 'none';
-        button.style.display = 'inline-block';
-        button.onclick = () => form.submit();
-        messageEl.textContent = 'Tap the button below to continue to eSewa.';
-      }
+    function showError(message) {
+      statusText.textContent = 'We could not continue to eSewa.';
+      spinnerLabel.textContent = 'Stopped';
+      errorBox.style.display = 'block';
+      errorBox.textContent = message;
+      retryBtn.style.display = 'block';
+    }
 
-      function showError(message) {
-        spinner.style.display = 'none';
-        statusEl.style.display = 'none';
-        errorEl.style.display = 'block';
-        errorEl.textContent = message;
-      }
-
-      if (!sessionUrl) {
-        showError('Missing payment session. Please go back to the app and try again.');
-        return;
-      }
-
+    async function start() {
       try {
-        const response = await fetch(sessionUrl, {
+        const url = new URL(window.location.href);
+        const sessionUrl = url.searchParams.get('sessionUrl');
+
+        if (!sessionUrl) {
+          showError('Missing sessionUrl in checkout link.');
+          return;
+        }
+
+        statusText.textContent = 'Connecting to server…';
+        spinnerLabel.textContent = 'Loading payment session';
+
+        const res = await fetch(sessionUrl, {
           method: 'GET',
-          headers: { 'Accept': 'application/json' },
-          cache: 'no-store',
+          headers: {
+            'Accept': 'application/json'
+          }
         });
 
-        if (!response.ok) {
-          const text = await response.text();
-          showError(text || 'Could not prepare the payment session.');
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (_) {
+          showError('Server returned invalid session data.');
           return;
         }
 
-        const payload = await response.json();
-        if (!payload.form_url || !payload.form_fields) {
-          showError('Payment session is incomplete. Please try again.');
+        if (!res.ok) {
+          showError(data.error || `Session request failed (${res.status}).`);
           return;
         }
 
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = payload.form_url;
-        form.style.display = 'none';
+        if (!data.form_url || !data.form_fields || typeof data.form_fields !== 'object') {
+          showError('Session response is incomplete.');
+          return;
+        }
 
-        Object.entries(payload.form_fields).forEach(([name, value]) => {
+        statusText.textContent = 'Redirecting you securely to eSewa…';
+        spinnerLabel.textContent = 'Submitting payment form';
+
+        esewaForm.action = data.form_url;
+
+        Object.entries(data.form_fields).forEach(([key, value]) => {
           const input = document.createElement('input');
           input.type = 'hidden';
-          input.name = name;
+          input.name = key;
           input.value = String(value ?? '');
-          form.appendChild(input);
+          esewaForm.appendChild(input);
         });
 
-        document.body.appendChild(form);
-
         setTimeout(() => {
-          try {
-            form.submit();
-          } catch (_) {
-            showManual(form);
-          }
-        }, 600);
-      } catch (error) {
-        showError('Could not connect to the payment gateway. Please check your connection and try again.');
+          esewaForm.submit();
+        }, 400);
+      } catch (err) {
+        showError(`Unexpected error: ${err?.message || err}`);
       }
-    })();
+    }
+
+    start();
   </script>
 </body>
 </html>
